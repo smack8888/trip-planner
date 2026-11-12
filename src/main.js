@@ -8,6 +8,7 @@ import { tripDetailsView } from './views/trip-details.js';
 import { recommendationsView } from './views/recommendations.js';
 import { stayView } from './views/stay.js';
 import { travelView } from './views/travel.js';
+import { forYouView } from './views/for-you.js';
 import { itineraryView } from './views/itinerary.js';
 
 // Address (after the #) -> page. ":id" matches any trip id.
@@ -16,6 +17,7 @@ const routes = [
   ['/new', tripDetailsView], // step 1 for a new trip: destination, dates, pace
   ['/plan/:id/details', tripDetailsView], // change dates or pace later
   ['/plan/:id', recommendationsView], // step 2: pick places
+  ['/plan/:id/for-you', forYouView], // optional step: questions, then less obvious places
   ['/plan/:id/stay', stayView], // step 3: where you'll stay
   ['/plan/:id/travel', travelView], // step 4: getting there and back
   ['/plan/:id/itinerary', itineraryView], // step 5: organised days

@@ -65,9 +65,17 @@ export function updateMap(state) {
 
   // 1. Route lines, one per leg, coloured by day and styled by mode.
   if (state.legs) {
+    const ICONS = { airport: '✈', station: '🚆', coach: '🚌' };
     state.legs.forEach(({ d, a, b, route }) => {
       if (route) drawRoute(route, a, b, colourOf(d));
       else drawLeg(a, b, 'auto', colourOf(d));
+      // An airport or station at either end gets its own small pin. It isn't
+      // used to fit the view, so the city stays readable; zoom out to see it.
+      [a, b].filter((p) => ICONS[p.kind]).forEach((p) => {
+        L.marker([p.lat, p.lng], { icon: icon(`<div class="pin hotel">${ICONS[p.kind]}</div>`, 22) })
+          .bindTooltip(esc(p.name))
+          .addTo(layer);
+      });
     });
   } else {
     days.forEach((d) => {

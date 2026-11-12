@@ -3,8 +3,9 @@
 //   GET /api/routes-config
 //     Whether real routes are switched on (TRANSITOUS_CONTACT is set in .env).
 //
-//   GET /api/route?from=lat,lng&to=lat,lng&departure=ISO
-//     One real route from Transitous (see transitous.js).
+//   GET /api/route?from=lat,lng&to=lat,lng&departure=ISO   (or &arrive=ISO)
+//     One real route from Transitous (see transitous.js), leaving at a time
+//     or arriving by it.
 //
 // Transitous asks every app to say who it is and how to reach its author,
 // so nothing is sent to it until TRANSITOUS_CONTACT is filled in.

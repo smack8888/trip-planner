@@ -32,7 +32,7 @@ const answer = {
 
 describe('reading Transitous’s answer', () => {
   it('keeps the quicker option, counting the wait for the metro', () => {
-    const { route, fetchedAt } = parsePlan(answer, leave, now);
+    const { route, fetchedAt } = parsePlan(answer, { time: leave }, now);
     expect(fetchedAt).toBe('2026-11-12T10:00:00.000Z');
     // Metro: leave 09:00, arrive 09:17 -> 17 min (14 min trip + 3 min wait). Walking: 25 min.
     expect(route).toMatchObject({ mode: 'transit', minutes: 17, distanceM: 450 });
@@ -46,28 +46,42 @@ describe('reading Transitous’s answer', () => {
 
   it('walks when walking is quicker', () => {
     const slowMetro = { ...answer, itineraries: [{ ...answer.itineraries[0], endTime: '2026-11-15T09:40:00Z' }] };
-    expect(parsePlan(slowMetro, leave, now).route).toMatchObject({ mode: 'walk', minutes: 25, distanceM: 1900 });
+    expect(parsePlan(slowMetro, { time: leave }, now).route).toMatchObject({ mode: 'walk', minutes: 25, distanceM: 1900 });
   });
 
   it('names the direction by where the ride really ends, not an internal code', () => {
     const rer = { itineraries: [{ ...answer.itineraries[0], legs: [{
       ...answer.itineraries[0].legs[1], mode: 'REGIONAL_RAIL', routeShortName: 'B', headsign: 'SOSO', tripTo: { name: 'Laplace' },
     }] }] };
-    expect(parsePlan(rer, leave, now).route.segments[0]).toMatchObject({ line: 'B', headsign: 'Laplace' });
+    expect(parsePlan(rer, { time: leave }, now).route.segments[0]).toMatchObject({ line: 'B', headsign: 'Laplace' });
   });
 
   it('passes on plain colours only', () => {
     const odd = { itineraries: [{ ...answer.itineraries[0], legs: [{ ...answer.itineraries[0].legs[1], routeColor: 'red;x' }] }] };
-    expect(parsePlan(odd, leave, now).route.segments[0].colour).toBeNull();
+    expect(parsePlan(odd, { time: leave }, now).route.segments[0].colour).toBeNull();
   });
 
   it('no route at all', () => {
-    expect(parsePlan({ direct: [], itineraries: [] }, leave, now).route).toBeNull();
+    expect(parsePlan({ direct: [], itineraries: [] }, { time: leave }, now).route).toBeNull();
+  });
+
+  it('arriving by a time: counts from setting off until that time, and skips connections that are too late', () => {
+    // Must be there by 09:20. The metro (09:03 to 09:17) works: set off 09:03 -> 17 min.
+    // A second connection arriving 09:25 is too late and is ignored.
+    const late = { ...answer.itineraries[0], startTime: '2026-11-15T09:10:00Z', endTime: '2026-11-15T09:25:00Z' };
+    const byTime = { direct: [], itineraries: [answer.itineraries[0], late] };
+    const { route } = parsePlan(byTime, { time: '2026-11-15T09:20:00.000Z', arriveBy: true }, now);
+    expect(route).toMatchObject({ mode: 'transit', minutes: 17 });
+  });
+
+  it('understands "arrive by" questions from the page', () => {
+    const q = checkRouteQuery(new URLSearchParams('from=41.9,12.48&to=41.8,12.25&arrive=2026-11-15T09:20:00Z'));
+    expect(q).toMatchObject({ arriveBy: true, time: '2026-11-15T09:20:00.000Z' });
   });
 });
 
 describe('asking Transitous', () => {
-  const query = { from: { lat: 41.9, lng: 12.48 }, to: { lat: 41.89, lng: 12.49 }, departure: leave };
+  const query = { from: { lat: 41.9, lng: 12.48 }, to: { lat: 41.89, lng: 12.49 }, time: leave, arriveBy: false };
   const ua = userAgent('0.1.0', 'https://github.com/example/trip-planner');
 
   it('says who it is, and asks for walking and transport at the right time', async () => {
@@ -116,7 +130,7 @@ describe('checking what the page asks for', () => {
 
   it('accepts a sensible question', () => {
     expect(ask('from=41.9,12.48&to=41.89,12.49&departure=2026-11-15T09:00:00Z')).toEqual({
-      from: { lat: 41.9, lng: 12.48 }, to: { lat: 41.89, lng: 12.49 }, departure: leave,
+      from: { lat: 41.9, lng: 12.48 }, to: { lat: 41.89, lng: 12.49 }, time: leave, arriveBy: false,
     });
   });
 

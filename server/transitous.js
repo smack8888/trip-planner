@@ -27,16 +27,20 @@ export class RouteError extends Error {
   }
 }
 
-// Checks what the page asked for:  ?from=lat,lng&to=lat,lng&departure=ISO
+// Checks what the page asked for:
+//   ?from=lat,lng&to=lat,lng&departure=ISO   leave at that time
+//   ?from=lat,lng&to=lat,lng&arrive=ISO      arrive by that time (e.g. at the airport)
+// -> { from, to, time, arriveBy }
 export function checkRouteQuery(params) {
   const from = latLng(params.get('from'));
   const to = latLng(params.get('to'));
   if (!from || !to) throw new RouteError('Missing or invalid from/to location.', 400);
-  const text = params.get('departure') ?? '';
+  const arriveBy = params.has('arrive');
+  const text = (arriveBy ? params.get('arrive') : params.get('departure')) ?? '';
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z$/.test(text) || Number.isNaN(Date.parse(text))) {
-    throw new RouteError('Missing or invalid departure time.', 400);
+    throw new RouteError('Missing or invalid departure or arrival time.', 400);
   }
-  return { from, to, departure: new Date(text).toISOString() };
+  return { from, to, time: new Date(text).toISOString(), arriveBy };
 }
 
 function latLng(text) {
@@ -71,7 +75,7 @@ export function createPlanner(settings) {
   }
 
   return async function plan(query) {
-    const key = `${query.from.lat},${query.from.lng}>${query.to.lat},${query.to.lng}@${query.departure}`;
+    const key = `${query.from.lat},${query.from.lng}>${query.to.lat},${query.to.lng}${query.arriveBy ? '<' : '@'}${query.time}`;
     const kept = remembered.get(key);
     if (kept && now() - kept.at < REMEMBER_MS) return kept.result;
     const result = await turn(() => fetchPlan(query, { ...settings, fetchImpl, now: now() }));
@@ -80,14 +84,16 @@ export function createPlanner(settings) {
   };
 }
 
-// Asks Transitous for routes from a to b leaving at a time.
-// One request gives both the walking route and public transport options.
-export async function fetchPlan({ from, to, departure }, { userAgent: ua, fetchImpl = fetch, now = new Date() }) {
+// Asks Transitous for routes from a to b, leaving at a time (or arriving by
+// it, with arriveBy). One request gives both the walking route and public
+// transport options.
+export async function fetchPlan({ from, to, time, arriveBy = false }, { userAgent: ua, fetchImpl = fetch, now = new Date() }) {
   const query = new URLSearchParams({
     fromPlace: `${from.lat},${from.lng}`,
     toPlace: `${to.lat},${to.lng}`,
-    time: departure,
-    timetableView: 'false', // just the next departures after our time
+    time,
+    arriveBy: String(arriveBy),
+    timetableView: 'false', // just the connections closest to our time
     directModes: 'WALK',
     maxDirectTime: String(MAX_WALK_SECONDS),
     detailedLegs: 'true', // the shape of each leg, for the map
@@ -112,20 +118,22 @@ export async function fetchPlan({ from, to, departure }, { userAgent: ua, fetchI
     const detail = typeof json?.error === 'string' ? ` It says: ${json.error}` : '';
     throw new RouteError(`Transitous could not give a route (error ${response.status}).${detail}`);
   }
-  return parsePlan(json ?? {}, departure, now);
+  return parsePlan(json ?? {}, { time, arriveBy }, now);
 }
 
 // Transitous's answer -> { route, fetchedAt }: the quicker of walking and
 // public transport, counted from when we want to leave (so waiting for the
-// next metro counts). route is null if there's neither.
+// next metro counts), or, with arriveBy, from when we must set off until the
+// time we must be there. route is null if there's neither.
+//   when: { time: ISO, arriveBy }
 //   route: { mode: 'walk'|'transit', distanceM, minutes, segments }
 //   segment (walking):   { kind: 'walk', distanceM, minutes, paths }
 //   segment (transport): { kind: 'transit', vehicle, line, lineName, colour, textColour,
 //                          headsign, agency, from, to, stops, minutes, paths }
 //   paths: [{ points, precision }]: the route's shape (Google's polyline encoding).
-export function parsePlan(json, departure, now = new Date()) {
+export function parsePlan(json, { time, arriveBy = false }, now = new Date()) {
   const fetchedAt = now.toISOString();
-  const leave = Date.parse(departure);
+  const target = Date.parse(time);
   const options = [];
 
   for (const it of json.direct ?? []) {
@@ -134,10 +142,14 @@ export function parsePlan(json, departure, now = new Date()) {
   }
   for (const it of json.itineraries ?? []) {
     const route = toRoute(it);
+    const start = Date.parse(it.startTime);
     const end = Date.parse(it.endTime);
-    if (!route || !Number.isFinite(end)) continue;
-    // From when we want to leave until we arrive, including any wait.
-    route.minutes = Math.max(route.minutes, (end - leave) / 60000);
+    if (!route || !Number.isFinite(start) || !Number.isFinite(end)) continue;
+    // Leaving: from when we want to leave until we arrive, including the wait.
+    // Arriving by: from when we must set off until the time we must be there.
+    // Connections that would be too late (or leave too early) don't count.
+    if (arriveBy ? end > target : start < target) continue;
+    route.minutes = Math.max(route.minutes, (arriveBy ? target - start : end - target) / 60000);
     options.push({ route, minutes: route.minutes });
   }
   // Quickest first; walking wins a tie (it's listed first).

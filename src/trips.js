@@ -1,7 +1,13 @@
 // New trips: their details (destination, dates, pace) and the places you pick.
 //
 // A trip looks like:
-//   { id, destinationId, startDate, endDate, pace, createdAt, savedAt, picked: [...], stay }
+//   { id, destinationId, startDate, endDate, pace, createdAt, savedAt, picked: [...], stay, travel, personal }
+//
+// picked holds ids of popular places and of less obvious "For you" places
+// (see allPlaces in data/destinations.js).
+//
+// personal is your answers to the "For you" questions, or null:
+//   { interests: [...], crowds, reach, energy } (see logic/personalise.js)
 //
 // stay is where you sleep:
 //   null                                        not answered yet
@@ -31,9 +37,10 @@
 //
 // The functions at the top are "pure" (no storage), which makes them easy
 // to test. The ones at the bottom read and write the browser's storage.
-import { DESTINATIONS } from './data/destinations.js';
+import { DESTINATIONS, allPlaces } from './data/destinations.js';
 import { datesBetween, parseDate } from './logic/dates.js';
 import { TRAVEL_MODES, pointsFor } from './logic/travel.js';
+import { cleanAnswers, answer } from './logic/personalise.js';
 
 const SAVED_KEY = 'trip-planner:trips:v2';
 const WORKING_KEY = 'trip-planner:working:v2';
@@ -73,6 +80,7 @@ export function newTrip(details, now = new Date()) {
     picked: [],
     stay: null,
     travel: { arrival: null, departure: null },
+    personal: null,
   };
 }
 
@@ -81,12 +89,17 @@ export function withDetails(trip, { startDate, endDate, pace }) {
   return { ...trip, startDate, endDate, pace };
 }
 
-// Add the recommendation if it isn't picked yet, remove it if it is.
+// Add the place if it isn’t picked yet, remove it if it is.
 export function togglePick(trip, recommendationId) {
   const picked = trip.picked.includes(recommendationId)
     ? trip.picked.filter((id) => id !== recommendationId)
     : [...trip.picked, recommendationId];
   return { ...trip, picked };
+}
+
+// Answer one "For you" question (see answer() in logic/personalise.js).
+export function withAnswer(trip, questionId, value) {
+  return { ...trip, personal: cleanAnswers(answer(trip.personal, questionId, value)) };
 }
 
 // Answer "have you already booked somewhere to stay?". Switching answer
@@ -184,7 +197,7 @@ function canonical(value) {
 export function cleanTrip(t) {
   if (!t || typeof t.id !== 'string') return null;
   if (checkDetails(t)) return null;
-  const valid = new Set(DESTINATIONS[t.destinationId].recommendations.map((r) => r.id));
+  const valid = new Set(allPlaces(DESTINATIONS[t.destinationId]).map((r) => r.id));
   return {
     id: t.id,
     destinationId: t.destinationId,
@@ -199,6 +212,7 @@ export function cleanTrip(t) {
       arrival: cleanTravelLeg(t.travel?.arrival, DESTINATIONS[t.destinationId]),
       departure: cleanTravelLeg(t.travel?.departure, DESTINATIONS[t.destinationId]),
     },
+    personal: cleanAnswers(t.personal),
   };
 }
 

@@ -12,7 +12,7 @@
 //            Click a hotel to choose it: the itinerary then uses its address.
 // Either way, the itinerary then starts and ends each day there.
 import L from 'leaflet';
-import { DESTINATIONS } from '../data/destinations.js';
+import { DESTINATIONS, allPlaces } from '../data/destinations.js';
 import { getTrip, setWorking, chooseBooked, withStay, chooseHotel, PACES } from '../trips.js';
 import { organiseTrip } from '../logic/organise.js';
 import { rankAreas } from '../logic/stay.js';
@@ -128,7 +128,7 @@ export function stayView(root, { id }) {
   // Small grey dots for your picks, so you can see where your days will be.
   function drawPicks(map, trip, dest) {
     const points = [];
-    dest.recommendations
+    allPlaces(dest)
       .filter((r) => trip.picked.includes(r.id))
       .forEach((r) => {
         L.marker([r.lat, r.lng], { icon: icon('<div class="pin dot"></div>', 12), interactive: true })
@@ -440,8 +440,8 @@ function formatPrice({ amount, currency }) {
 
 // Areas ranked against the days as they'd be organised without a base.
 function rankedAreas(trip, dest) {
-  const byId = Object.fromEntries(dest.recommendations.map((r) => [r.id, r]));
-  const picks = dest.recommendations.filter((r) => trip.picked.includes(r.id));
+  const byId = Object.fromEntries(allPlaces(dest).map((r) => [r.id, r]));
+  const picks = allPlaces(dest).filter((r) => trip.picked.includes(r.id));
   const dayCount = datesBetween(trip.startDate, trip.endDate).length;
   const { days } = organiseTrip(picks, dayCount, PACES[trip.pace].hours);
   return rankAreas(dest.areas, days.map((ids) => ids.map((pid) => byId[pid])));

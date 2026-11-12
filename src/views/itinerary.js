@@ -14,10 +14,10 @@
 // streets, or public transport with the line, direction and stops. The page
 // is first drawn with estimates, then redrawn when the routes arrive, and the
 // map follows the real streets and lines. Without it, legs are estimates.
-import { DESTINATIONS } from '../data/destinations.js';
+import { DESTINATIONS, allPlaces } from '../data/destinations.js';
 import { getTrip, PACES, stayPlace } from '../trips.js';
 import { organiseTrip } from '../logic/organise.js';
-import { dayFrames, clockText, TRAVEL_MODES } from '../logic/travel.js';
+import { dayFrames, transferRoute, clockText, TRAVEL_MODES } from '../logic/travel.js';
 import { datesBetween, dayLabels } from '../logic/dates.js';
 import { distanceKm } from '../logic/geo.js';
 import { MODES, effectiveMode, legMinutes, formatMinutes } from '../logic/transport.js';
@@ -51,9 +51,9 @@ export function itineraryView(root, { id }) {
 
   // Fetches the routes the last drawing asked for, then draws again.
   async function fetchRoutes(wanted) {
-    await Promise.all(wanted.map(async ({ entry, a, b, departure }) => {
+    await Promise.all(wanted.map(async ({ entry, a, b, time, arriveBy }) => {
       try {
-        const { route, fetchedAt } = await askRoute(a, b, departure);
+        const { route, fetchedAt } = await askRoute(a, b, time, arriveBy);
         Object.assign(entry, route ? { status: 'done', route, fetchedAt } : { status: 'failed' });
       } catch (err) {
         routeProblem = err.message;
@@ -68,9 +68,9 @@ export function itineraryView(root, { id }) {
     const dest = DESTINATIONS[trip.destinationId];
     const pace = PACES[trip.pace];
     const dates = datesBetween(trip.startDate, trip.endDate);
-    const places = Object.fromEntries(dest.recommendations.map((r) => [r.id, r]));
-    // Priority = the recommendation list's order (most famous first).
-    const picks = dest.recommendations.filter((r) => trip.picked.includes(r.id));
+    const places = Object.fromEntries(allPlaces(dest).map((r) => [r.id, r]));
+    // Priority: popular places in order of fame, then your "For you" places.
+    const picks = allPlaces(dest).filter((r) => trip.picked.includes(r.id));
     const base = `#/plan/${encodeURIComponent(id)}`;
     const home = stayPlace(trip); // where each day starts and ends, or null
 
@@ -84,7 +84,45 @@ export function itineraryView(root, { id }) {
       return;
     }
 
-    const frames = dayFrames({ dayCount: dates.length, pace, home, travel: trip.travel, dest });
+    // Looks up the route for each leg as the page is drawn, and notes the
+    // ones we still need to ask Transitous for.
+    // arriveBy: the clock time is when you must be there, not when you leave.
+    const today = todayIn(dest.timeZone);
+    const router = {
+      on: routing,
+      wanted: [], // legs to ask about after drawing
+      used: [], // the route entries shown on this drawing
+      standIns: new Map(), // trip date -> timetable date used instead
+      get(a, b, clock, date, arriveBy = false) {
+        if (!routing) return null;
+        const tt = timetableDate(date, today);
+        if (tt.standIn) router.standIns.set(date, tt.date);
+        const key = `${legKey(a, b, tt.date)}${arriveBy ? '<' : ''}`;
+        let entry = routes.get(key);
+        if (!entry) {
+          entry = { status: 'pending' };
+          routes.set(key, entry);
+          router.wanted.push({ entry, a, b, time: zonedIso(tt.date, clock, dest.timeZone), arriveBy });
+        }
+        router.used.push(entry);
+        return entry;
+      },
+    };
+
+    // Getting from the airport or station to where you stay, and back. With
+    // real routes, these replace the rough transfer guesses, so they decide
+    // when the first day starts and the last day ends.
+    const rough = dayFrames({ dayCount: dates.length, pace, home, travel: trip.travel, dest });
+    const transferRoutes = {};
+    [['arrival', rough[0].arrival, dates[0]], ['departure', rough[rough.length - 1].departure, dates[dates.length - 1]]]
+      .forEach(([which, travelPlan, date]) => {
+        const t = transferRoute(travelPlan, which, home);
+        const entry = t && router.get(t.from, t.to, t.clock, date, t.arriveBy);
+        if (entry?.route) transferRoutes[which] = entry.route;
+      });
+    const frames = Object.keys(transferRoutes).length
+      ? dayFrames({ dayCount: dates.length, pace, home, travel: trip.travel, dest, routes: transferRoutes })
+      : rough;
     const plan = organiseTrip(picks, frames);
     if (dayFilter !== 'all' && dayFilter >= dates.length) dayFilter = 'all';
     const travelShapesDays = frames[0].arrival || frames[frames.length - 1].departure;
@@ -103,29 +141,6 @@ export function itineraryView(root, { id }) {
     };
     const shownDays = dayFilter === 'all' ? dates.map((_, d) => d) : [dayFilter];
 
-    // Looks up the route for each leg as the timetable is drawn, and notes
-    // the ones we still need to ask Transitous for.
-    const today = todayIn(dest.timeZone);
-    const router = {
-      on: routing,
-      wanted: [], // legs to ask about after drawing
-      used: [], // the route entries shown on this drawing
-      standIns: new Map(), // trip date -> timetable date used instead
-      get(a, b, clock, date) {
-        if (!routing) return null;
-        const tt = timetableDate(date, today);
-        if (tt.standIn) router.standIns.set(date, tt.date);
-        const key = legKey(a, b, tt.date);
-        let entry = routes.get(key);
-        if (!entry) {
-          entry = { status: 'pending' };
-          routes.set(key, entry);
-          router.wanted.push({ entry, a, b, departure: zonedIso(tt.date, clock, dest.timeZone) });
-        }
-        router.used.push(entry);
-        return entry;
-      },
-    };
     const legs = []; // every leg drawn, for the map: { d, a, b, route }
     const daysHtml = shownDays.map((d) => dayHtml(d, dates[d], plan.days[d], places, frames[d], home, router, legs)).join('');
 
@@ -186,9 +201,10 @@ export function itineraryView(root, { id }) {
   };
 }
 
-// Asks our dev server for one route. -> { route, fetchedAt }, or throws with the explanation.
-async function askRoute(a, b, departure) {
-  const query = new URLSearchParams({ from: `${a.lat},${a.lng}`, to: `${b.lat},${b.lng}`, departure });
+// Asks our dev server for one route, leaving at `time` (or arriving by it).
+// -> { route, fetchedAt }, or throws with the explanation.
+async function askRoute(a, b, time, arriveBy) {
+  const query = new URLSearchParams({ from: `${a.lat},${a.lng}`, to: `${b.lat},${b.lng}`, [arriveBy ? 'arrive' : 'departure']: time });
   const response = await fetch(`/api/route?${query}`);
   const body = await response.json().catch(() => null);
   if (!response.ok) throw new Error(body?.message ?? `The route couldn't be fetched (error ${response.status}).`);
@@ -228,7 +244,8 @@ function travelNoteHtml(router, routeProblem) {
         from the cities’ published timetables (<a href="https://transitous.org/sources/" target="_blank" rel="noopener">data sources</a>)
         and <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a> contributors. ${standIn}` : ''}
       ${failed ? `Some routes couldn’t be fetched, so those legs show an estimate${routeProblem ? ` (${esc(routeProblem)})` : ''}.` : ''}
-      Visit lengths are rough guesses, and airport transfers are rough guesses, not timetables. ${hours}</p>`;
+      Visit lengths are rough guesses. Trips from and to the airport or station are real routes when we know
+      where you stay; otherwise they're rough guesses. ${hours}</p>`;
 }
 
 // ---------- one day's timetable ----------
@@ -260,6 +277,10 @@ function dayHtml(d, date, ids, places, frame, home, router, legs) {
     legs.push({ d, a, b, route: null });
     return legRow(km, minutes, null, null, entry?.status === 'pending' ? 'checking the route…' : tag);
   };
+
+  // Real airport or station transfers go on the map too.
+  if (frame.arrival?.route) legs.push({ d, a: frame.arrival.point, b: home, route: frame.arrival.route });
+  if (frame.departure?.route) legs.push({ d, a: home, b: frame.departure.point, route: frame.departure.route });
 
   // ----- start of the day -----
   if (frame.arrival) {
@@ -326,7 +347,12 @@ function arrivalRows(a, home, homeWithAddress, tag) {
   const what = travelWhat(a.leg, a.mode, 'from');
   const where = a.point ? ` at ${esc(a.point.name)}` : '';
   rows.push(travelRow(a.mode, `${a.mode === TRAVEL_MODES.flight ? 'Land' : 'Arrive'}${where} about ${clockText(a.arrives)}${what}`));
-  if (a.point?.transferMinutes) {
+  if (a.route) {
+    // A real route from the airport or station to where you stay.
+    const outOf = a.mode === TRAVEL_MODES.flight ? 'Out of the airport' : `Out of ${esc(a.point.name)}`;
+    rows.push(noteRow(`${outOf} about ${clockText(a.out)}`));
+    rows.push(routeRow(a.route, home));
+  } else if (a.point?.transferMinutes) {
     rows.push(legRow(null, a.mode.arriveBuffer + a.point.transferMinutes,
       `Out of the airport, then into the city to ${esc(a.hub.name)} (${esc(a.point.transfer)}): about ${formatMinutes(a.mode.arriveBuffer + a.point.transferMinutes)}`));
   }
@@ -346,11 +372,12 @@ function departureRows(dep, home, homeName, backAt, tag) {
   if (home) {
     const back = backAt != null ? `Back ${home.kind === 'hotel' ? 'at' : 'in'} ${homeName} about ${clockText(backAt)}. ` : '';
     rows.push(homeRow(`${back}Leave ${homeName}${home.kind === 'hotel' ? ' with your bags' : ''} by about ${clockText(dep.leaveBy)}`));
-    if (dep.fromHome) rows.push(legRow(dep.fromHome.km, dep.fromHome.minutes, null, dep.hub.name, tag));
+    if (dep.route) rows.push(routeRow(dep.route, dep.point)); // the real route to the airport or station
+    else if (dep.fromHome) rows.push(legRow(dep.fromHome.km, dep.fromHome.minutes, null, dep.hub.name, tag));
   } else if (dep.hub && backAt != null) {
     rows.push(noteRow(`At ${esc(dep.hub.name)} about ${clockText(backAt)}`));
   }
-  if (dep.point?.transferMinutes) {
+  if (dep.point?.transferMinutes && !dep.route) {
     rows.push(legRow(null, dep.point.transferMinutes, `Out to the airport (${esc(dep.point.transfer)}): about ${formatMinutes(dep.point.transferMinutes)}`));
   }
   const what = travelWhat(dep.leg, dep.mode, 'to');
@@ -402,7 +429,10 @@ function routeRow(route, to) {
 
   const segments = route.segments.filter((s) => s.kind === 'transit' || s.distanceM >= 20); // skip a few steps' walk
   const rides = segments.filter((s) => s.kind === 'transit');
-  const kinds = [...new Set(rides.map((s) => s.vehicle))].join(' and ');
+  // 'Metro', 'Tram and metro', 'Tram, regional train and metro'
+  const kinds = [...new Set(rides.map((s) => s.vehicle))]
+    .map((k, i) => (i === 0 ? k : k.toLowerCase()))
+    .join(', ').replace(/, ([^,]*)$/, ' and $1');
   const steps = segments.map((s, i) => {
     if (s.kind === 'walk') {
       const next = segments[i + 1];

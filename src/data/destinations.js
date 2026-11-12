@@ -28,6 +28,7 @@
 //                    getting to the train or bus and some waiting. Not a timetable.
 //   transfer         how people usually make that trip, in a few words
 // Locations are approximate, typed by hand.
+import { DISCOVERIES } from './discoveries.js';
 
 export const RECOMMENDATIONS_SOURCE =
   'Starter list picked by hand: well-known highlights in rough order of fame, not ranked by real data yet. ' +
@@ -41,6 +42,7 @@ export const DESTINATIONS = {
     center: [48.8566, 2.3522],
     timeZone: 'Europe/Paris',
     blurb: 'Museums and landmarks along the Seine, with parks, canals and market streets in between.',
+    discoveries: DISCOVERIES.paris, // less obvious places for the "For you" step
     recommendations: [
       { id: 'eiffel', name: 'Eiffel Tower', area: 'Champ de Mars, 7th', category: 'sight', lat: 48.8584, lng: 2.2945, visitHours: 2, why: 'The city’s best-known landmark, with viewing platforms on several levels.' },
       { id: 'louvre', name: 'Musée du Louvre', area: '1st arrondissement', category: 'sight', lat: 48.8606, lng: 2.3376, visitHours: 3, why: 'One of the world’s largest art museums, in a former royal palace. Home of the Mona Lisa.' },
@@ -91,6 +93,7 @@ export const DESTINATIONS = {
     center: [41.8986, 12.4768],
     timeZone: 'Europe/Rome',
     blurb: 'Ancient ruins, baroque squares and the Vatican, with hilltop views, big parks and neighbourhood markets.',
+    discoveries: DISCOVERIES.rome,
     recommendations: [
       { id: 'colosseum', name: 'Colosseum', area: 'Celio', category: 'sight', lat: 41.8902, lng: 12.4922, visitHours: 1.5, why: 'The largest amphitheatre of ancient Rome, still standing at the centre of the city.' },
       { id: 'forum', name: 'Roman Forum and Palatine Hill', area: 'Next to the Colosseum', category: 'sight', lat: 41.8925, lng: 12.4853, visitHours: 2.5, why: 'Ruins of ancient Rome’s centre of public life, beside the hill where emperors built their palaces.' },
@@ -129,3 +132,9 @@ export const DESTINATIONS = {
     ],
   },
 };
+
+// Every place you can pick in a destination: the popular recommendations
+// first (most famous first), then the less obvious "For you" places.
+export function allPlaces(dest) {
+  return [...dest.recommendations, ...dest.discoveries];
+}

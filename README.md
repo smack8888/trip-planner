@@ -9,6 +9,10 @@ A personal trip planner for two travellers.
 - **Plan a new trip** in five steps:
   1. **Details**: destination (Paris or Rome), first and last day, pace (packed or relaxed).
   2. **Places**: mark the recommended places that interest you.
+     - **★ For you** (optional): answer four quick questions (what you enjoy,
+       crowds, how far you will go, how active) and get less obvious places
+       that suit you, each saying why. Mark the ones you like; they join your
+       picks and go into the itinerary like the others.
   3. **Stay**: have you already booked somewhere?
      - **Yes**: add the name and address, and click the map to put a pin where it is.
      - **Not yet**: areas to stay in, ranked by how close they are to your picks.
@@ -88,6 +92,7 @@ src/
     home.js           Home: plan a new trip, saved trips, past trips
     trip-details.js   Step 1: destination, dates, pace (#/new and #/plan/<id>/details)
     recommendations.js  Step 2: popular places; mark the ones you like (#/plan/<id>)
+    for-you.js        Optional step: questions, then less obvious places that suit you (#/plan/<id>/for-you)
     stay.js           Step 3: booked hotel (address + pin), or areas and hotels to choose from (#/plan/<id>/stay)
     travel.js         Step 4: getting there and back (#/plan/<id>/travel)
     itinerary.js      Step 5: picks organised into days, timetable, map (#/plan/<id>/itinerary)
@@ -97,11 +102,13 @@ src/
     destinations.js   Paris and Rome: hand-picked recommendations with approximate
                       locations and rough visit lengths, plus areas to stay in
                       and the airports and stations you can arrive at
+    discoveries.js    Less obvious places for the "For you" step, tagged with what they suit
   logic/              Pure calculations, no screen code (easy to test)
     geo.js            Distance between two points
     transport.js      Modes, speeds, leg time, "auto" mode choice
     optimise.js       Reorders a day's unfixed stops around fixed ones
     organise.js       Splits picked places into days that fit the time available
+    personalise.js    The "For you" questions, and matching places to your answers
     stay.js           Ranks areas to stay in by travel to and from your days
     travel.js         Arrival and departure: what they leave of the first and last day
     routing.js        Real routes: timetable dates, city time zones, route shapes
@@ -144,6 +151,12 @@ Prototype/            The original single-file prototype, kept as reference
   your bags: departure, minus time to be there early (2 h for a flight, 30 min
   for a train), minus the transfer and the trip across town. The organiser
   sizes each day's share of places to the time it has.
+
+  With real routes on and where you stay known, the transfer is a real route
+  instead of a guess: from the airport or station straight to where you stay,
+  leaving when you're out (e.g. the RER B then the metro), and on the last day
+  a route that gets you to the airport or station in time, which decides when
+  you must leave. The days are organised again once these routes arrive.
 - **Areas to stay in** are ranked by the average travel per day from the area to
   each day's first stop and back from its last stop (using the days as they'd be
   organised without a hotel).
@@ -162,7 +175,8 @@ Prototype/            The original single-file prototype, kept as reference
   estimates. With them, legs between places are real routes, but:
   - the organiser still groups places into days using the estimates, so a day can
     run a little over once real routes are in (the day's summary says so);
-  - the trip in from the airport or station, and back, is still an estimate;
+  - the trip in from the airport or station, and back, is only a real route when
+    you've chosen the airport or station and where you stay;
   - published timetables only cover the next few months, so for a trip more than
     about two months away it uses the next same weekday's timetable (the page says which);
   - Transitous is a free service run by volunteers, with no guarantee: if it's
@@ -170,6 +184,10 @@ Prototype/            The original single-file prototype, kept as reference
 - No opening hours, prices or reviews. Those will come from a places API, never made up.
 - Recommendations are a hand-picked starter list in rough order of fame, not ranked
   by real popularity data yet. The page says so.
+- The "For you" places are also a hand-picked list (about 20 per city), tagged by
+  hand with what they suit. When not everything fits, the organiser leaves out
+  "For you" picks before popular ones. Day trips are estimated at regional
+  train speed when organising the days.
 - Bookings are in the seed data but not shown yet.
 - Typing a hotel address doesn't move the pin: that needs an address-lookup
   (geocoding) service. For now you click the map.
@@ -180,8 +198,8 @@ Prototype/            The original single-file prototype, kept as reference
   "Yes, it's booked" if you like. Its price is kept as it was when fetched.
 - Arrival is always on the first day and departure on the last. If you arrive
   the evening before, make that the first day.
-- Airport transfer times and the "be there early" allowances are rough fixed
-  guesses, not timetables, and can't be changed in the app yet.
+- Without real routes, airport transfer times are rough fixed guesses. The "be there early" allowances are
+  fixed (45 min to get out, 2 h before a flight) and can't be changed in the app yet.
 
 ## Secrets
 

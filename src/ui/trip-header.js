@@ -1,5 +1,5 @@
 // Shared top part of every new-trip page: title, dates, step links
-// (Details, Places, Stay, Travel, Itinerary) and the save bar.
+// (Details, Places, For you (optional), Stay, Travel, Itinerary) and the save bar.
 import { DESTINATIONS } from '../data/destinations.js';
 import { PACES, saveStatus, saveTrip, discardChanges } from '../trips.js';
 import { datesBetween, formatRange } from '../logic/dates.js';
@@ -13,13 +13,17 @@ export function renderTripHeader(trip, step) {
   const steps = [
     ['details', 'Details', `${base}/details`],
     ['places', 'Places', base],
+    ['for-you', 'For you', `${base}/for-you`, 'optional'],
     ['stay', 'Stay', `${base}/stay`],
     ['travel', 'Travel', `${base}/travel`],
     ['itinerary', 'Itinerary', `${base}/itinerary`],
   ];
-  const nav = steps.map(([id, label, href], i) => `
-    <a class="step" href="${href}"${id === step ? ' aria-current="page"' : ''}>
-      <span class="stepnum">${i + 1}</span>${label}
+  // Optional steps get a ★ instead of a number, so the others keep 1 to 5.
+  let n = 0;
+  const nav = steps.map(([id, label, href, optional]) => `
+    <a class="step${optional ? ' optional' : ''}" href="${href}"${id === step ? ' aria-current="page"' : ''}
+      ${optional ? 'title="Optional"' : ''}>
+      <span class="stepnum"${optional ? ' aria-label="Optional"' : ''}>${optional ? '★' : ++n}</span>${label}
     </a>`).join('');
 
   return `

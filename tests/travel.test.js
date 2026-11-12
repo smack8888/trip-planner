@@ -1,7 +1,7 @@
 // Checks for getting there and back (logic/travel.js), the organiser with
 // days of different lengths, and choosing a hotel. Run with:  npm test
 import { describe, it, expect } from 'vitest';
-import { dayFrames, arrivalPlan, departurePlan, pointsFor, toMinutes, clockText, cityLeg, TRAVEL_MODES } from '../src/logic/travel.js';
+import { dayFrames, arrivalPlan, departurePlan, transferRoute, pointsFor, toMinutes, clockText, cityLeg, TRAVEL_MODES } from '../src/logic/travel.js';
 import { organiseTrip, dayLoadMinutes } from '../src/logic/organise.js';
 import { newTrip, chooseBooked, chooseHotel, withTravel, clearTravel, stayPlace, cleanTrips, PACES } from '../src/trips.js';
 import { DESTINATIONS } from '../src/data/destinations.js';
@@ -88,6 +88,38 @@ describe('dayFrames', () => {
   it('a late arrival leaves no time on the first day', () => {
     const [first] = dayFrames({ dayCount: 2, pace: packed, home: hotel, travel: { arrival: { ...flightIn, time: '20:00' }, departure: null }, dest: rome });
     expect(first.budget).toBe(0);
+  });
+});
+
+describe('real routes to and from the airport', () => {
+  const route = { mode: 'transit', minutes: 70, distanceM: 600, segments: [] };
+
+  it('arriving: ready when out of the airport plus the real route, no guesses', () => {
+    const a = arrivalPlan(flightIn, hotel, rome, route);
+    expect(a).toMatchObject({ out: 735, ready: 735 + 70, atHub: null, toHome: null, route });
+  });
+
+  it('leaving: leave where you stay the route’s time before you must be at the airport', () => {
+    const d = departurePlan(flightOut, hotel, rome, route);
+    expect(d).toMatchObject({ beAt: 900, leaveBy: 900 - 70, leaveHub: null, fromHome: null, route });
+  });
+
+  it('the days follow the real transfers', () => {
+    const frames = dayFrames({
+      dayCount: 3, pace: packed, home: hotel, travel: { arrival: flightIn, departure: flightOut }, dest: rome,
+      routes: { arrival: route, departure: route },
+    });
+    expect(frames[0].startClock).toBe(805);
+    expect(frames[2].endBy).toBe(830);
+  });
+
+  it('only asks for a transfer route when we know the airport and where you stay', () => {
+    const a = arrivalPlan(flightIn, hotel, rome);
+    expect(transferRoute(a, 'arrival', hotel)).toMatchObject({ from: { id: 'fco' }, to: hotel, clock: 735, arriveBy: false });
+    expect(transferRoute(departurePlan(flightOut, hotel, rome), 'departure', hotel)).toMatchObject({ to: { id: 'fco' }, clock: 900, arriveBy: true });
+    expect(transferRoute(a, 'arrival', null)).toBeNull();
+    const byCar = arrivalPlan({ mode: 'car', place: '', number: '', pointId: '', time: '12:00' }, hotel, rome);
+    expect(transferRoute(byCar, 'arrival', hotel)).toBeNull();
   });
 });
 

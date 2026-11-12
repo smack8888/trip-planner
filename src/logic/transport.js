@@ -15,7 +15,9 @@ export const MODES = {
 const MINUTES = {
   walk: (km) => km * 16.25, // about 3.7 km/h along real streets
   bike: (km) => 4 + km * 5.57, // 4 min to pick up and drop the bike
-  metro: (km) => 10 + km * 3.9, // 10 min to walk to the station and wait
+  // 10 min to walk to the station and wait. Beyond 10 km you'd take a
+  // regional train, which covers each extra km much faster.
+  metro: (km) => 10 + Math.min(km, 10) * 3.9 + Math.max(0, km - 10) * 1.5,
   bus: (km) => 8 + km * 6.5, // 8 min waiting, slower in traffic
 };
 

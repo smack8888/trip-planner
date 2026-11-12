@@ -25,6 +25,12 @@ describe('distance and travel time', () => {
     expect(effectiveMode(5, 'auto')).toBe('metro');
   });
 
+  it('long trips out of the city are estimated at regional train speed', () => {
+    expect(legMinutes(5, 'metro')).toBeCloseTo(10 + 5 * 3.9);
+    // About 56 km (Paris to Fontainebleau): 10 + 39 + 69 = 118 min, not 228.
+    expect(legMinutes(56, 'metro')).toBeCloseTo(10 + 39 + 46 * 1.5);
+  });
+
   it('uses the chosen mode when one is set', () => {
     expect(effectiveMode(5, 'bike')).toBe('bike');
     expect(legMinutes(2, 'walk')).toBeCloseTo(32.5);

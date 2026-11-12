@@ -1,6 +1,6 @@
 // Step 2 of a new trip: popular places at the destination.
 // Mark the ones you like as "Interested", then organise them into days.
-import { DESTINATIONS, RECOMMENDATIONS_SOURCE } from '../data/destinations.js';
+import { DESTINATIONS, RECOMMENDATIONS_SOURCE, allPlaces } from '../data/destinations.js';
 import { getTrip, setWorking, togglePick } from '../trips.js';
 import { esc, CATEGORY_LABELS } from '../ui/html.js';
 import { renderTripHeader, handleSaveBarClick, warnBeforeLeaving } from '../ui/trip-header.js';
@@ -25,8 +25,10 @@ export function recommendationsView(root, { id }) {
     const trip = getTrip(id);
     const dest = DESTINATIONS[trip.destinationId];
     const focusKey = document.activeElement?.dataset?.rec || document.activeElement?.dataset?.filter;
-    const shown = dest.recommendations.filter((r) =>
-      filter === 'all' ? true : filter === 'picked' ? trip.picked.includes(r.id) : r.category === filter);
+    // "Your picks" also shows places you picked in the "For you" step.
+    const shown = filter === 'picked'
+      ? allPlaces(dest).filter((r) => trip.picked.includes(r.id))
+      : dest.recommendations.filter((r) => filter === 'all' || r.category === filter);
 
     const chips = FILTERS.map(([value, label]) => `
       <button class="chip all" data-filter="${value}" aria-pressed="${filter === value}">
@@ -49,7 +51,8 @@ export function recommendationsView(root, { id }) {
     }).join('');
 
     const n = trip.picked.length;
-    const pickedNames = dest.recommendations.filter((r) => trip.picked.includes(r.id)).map((r) => esc(r.name));
+    const pickedNames = allPlaces(dest).filter((r) => trip.picked.includes(r.id)).map((r) => esc(r.name));
+    const base = `#/plan/${encodeURIComponent(id)}`;
 
     root.innerHTML = `
       ${renderTripHeader(trip, 'places')}
@@ -57,12 +60,17 @@ export function recommendationsView(root, { id }) {
       <p class="source">${esc(RECOMMENDATIONS_SOURCE)}</p>
       <div class="chips" role="group" aria-label="Filter places">${chips}</div>
       <div class="grid">${cards || '<p class="muted">Nothing here yet. Mark places as interesting to see them in this list.</p>'}</div>
+      <section class="card foryoulink">
+        <h3>★ Looking for something less obvious?</h3>
+        <p class="muted">Optional: answer four quick questions and we’ll suggest places that suit you, away from the usual sights.</p>
+        <a class="btn" href="${base}/for-you">Find places for us →</a>
+      </section>
       <div class="picksbar">
         <div class="picksinfo">
           <b>${n} picked</b>
           <span class="muted small">${n ? pickedNames.join(', ') : 'Nothing picked yet.'}</span>
         </div>
-        ${n ? `<a class="btn solid" href="#/plan/${encodeURIComponent(id)}/stay">Next: where you’ll stay →</a>` : ''}
+        ${n ? `<a class="btn solid" href="${base}/stay">Next: where you’ll stay →</a>` : ''}
       </div>`;
 
     if (focusKey) root.querySelector(`[data-rec="${focusKey}"], [data-filter="${focusKey}"]`)?.focus({ preventScroll: true });

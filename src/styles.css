@@ -250,3 +250,14 @@ li.leg.route > span { font-weight: 600; color: var(--ink); }
 .legsteps li { line-height: 1.45; }
 .linebadge { display: inline-block; min-width: 22px; padding: 0 5px; border-radius: 5px; text-align: center;
   font: 700 12px/18px var(--head); background: var(--ink); color: var(--card); vertical-align: 1px; }
+
+/* ---------- "For you" step ---------- */
+.step.optional { border-style: dashed; }
+.quiz { display: grid; gap: 18px; margin-bottom: 22px; }
+.question { border: 0; margin: 0; padding: 0; min-width: 0; }
+.question legend { font: 700 16px var(--head); margin-bottom: 8px; padding: 0; }
+.question .chip[aria-disabled="true"] { opacity: .45; }
+.resultshead { margin: 8px 0 2px; }
+.suits { font-size: 14px; margin: 4px 0; }
+.suits b { color: var(--accent); }
+.foryoulink { margin: 14px 0 0; }
