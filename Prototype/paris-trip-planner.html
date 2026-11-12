@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paris trip planner</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF0EF; --card:#FFFFFF; --ink:#1E2A32; --muted:#587080; --line:#D3DBDE;
+  --water:#BCDCE6; --land:#E3E9E4; --park:#CBE0C3; --street:#F8FAF7; --accent:#1B6B70; --accent-soft:#DCEDEE; --good:#1F7A4D;
+  --d1:#F2C500; --d1i:#1B1B1B; --d2:#BD4A9B; --d2i:#FFFFFF; --d3:#2E9E78; --d3i:#06201A; --d4:#E8873A; --d4i:#1B1B1B;
+  --head:'Bricolage Grotesque','Avenir Next','Segoe UI',system-ui,sans-serif;
+  --body:'Public Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#11171C; --card:#192129; --ink:#E6ECEF; --muted:#9DB0BB; --line:#2A3640;
+    --water:#244658; --land:#1B252B; --park:#23392B; --street:#2C3A43; --accent:#62C3C0; --accent-soft:#1F3A3F; --good:#6FD39F;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#11171C; --card:#192129; --ink:#E6ECEF; --muted:#9DB0BB; --line:#2A3640;
+  --water:#244658; --land:#1B252B; --park:#23392B; --street:#2C3A43; --accent:#62C3C0; --accent-soft:#1F3A3F; --good:#6FD39F;
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 var(--body)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button{font:inherit;cursor:pointer}
+button:disabled{opacity:.4;cursor:default}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 18px 56px}
+
+/* masthead */
+.masthead{display:flex;flex-wrap:wrap;gap:18px 32px;align-items:flex-end;justify-content:space-between;margin-bottom:24px}
+h1{font:700 clamp(48px,9vw,96px)/.92 var(--head);letter-spacing:-.035em;margin:0}
+.trip{margin:12px 0 0;color:var(--muted);max-width:46ch}
+.plans{display:flex;gap:10px;flex-wrap:wrap}
+.plan{text-align:left;border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 16px 10px 14px;min-width:200px}
+.plan[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.plan b{display:block;font:600 15px var(--head)}
+.plan .big{display:block;font:700 26px/1.15 var(--head);font-variant-numeric:tabular-nums}
+.plan .sub{display:block;font-size:13px;color:var(--muted)}
+.plan .gain{color:var(--good);font-weight:600}
+
+/* tabs */
+.tabs{display:flex;gap:6px;border-bottom:1.5px solid var(--line);margin-bottom:18px;overflow-x:auto}
+.tab{background:none;border:0;padding:10px 14px;font:600 15px var(--body);color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-1.5px;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+
+/* itinerary layout */
+.itin{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:22px;align-items:start}
+@media (max-width:900px){.itin{grid-template-columns:minmax(0,1fr)}}
+@media (min-width:901px){.mappane{position:sticky;top:calc(env(safe-area-inset-top,0px) + 14px)}}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1.5px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:5px 13px 5px 5px;font:500 14px var(--body)}
+.chip.all{padding-left:13px}
+.chip[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.roundel{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font:700 14px var(--head);flex:none}
+.r1{background:var(--d1);color:var(--d1i)}.r2{background:var(--d2);color:var(--d2i)}.r3{background:var(--d3);color:var(--d3i)}.r4{background:var(--d4);color:var(--d4i)}
+.mapbox{border:1.5px solid var(--line);border-radius:12px;overflow:hidden;background:var(--land)}
+.mapbox svg{display:block;width:100%;height:auto}
+.land{fill:var(--land)}
+.mk{transition:transform .15s ease;transform-box:fill-box;transform-origin:center}
+.mk.hot{transform:scale(1.3)}
+.lbl{font-weight:600;fill:var(--ink);paint-order:stroke;stroke:var(--land);stroke-linejoin:round}
+.ctx{fill:var(--muted);paint-order:stroke;stroke:var(--land);stroke-linejoin:round}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:10px 2px 0;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{color:var(--ink)}
+.mapnote{margin:6px 2px 0;color:var(--muted);font-size:13px}
+
+/* days */
+.day{background:var(--card);border:1.5px solid var(--line);border-left:6px solid var(--dc);border-radius:12px;padding:14px 16px 8px;margin-bottom:16px}
+.dayhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dayhead .roundel{background:var(--dc);color:var(--dci);width:30px;height:30px}
+.dayhead h3{font:700 20px var(--head);margin:0;letter-spacing:-.01em}
+.daytools{margin-left:auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.km{font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.btn{border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:8px;padding:5px 11px;font-weight:600;font-size:13.5px}
+.btn.solid{background:var(--accent);color:var(--card)}
+.insight{margin:12px 0 8px;max-width:62ch}
+.edge{margin:6px 0;color:var(--muted);font-size:13.5px;border-left:2px dashed var(--line);padding-left:10px}
+.stops{list-style:none;margin:6px 0 0;padding:0}
+.stop{display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start;padding:8px 0}
+.num{display:grid;place-items:center;width:28px;height:28px;border-radius:50%;font:700 14px var(--head);background:var(--dc);color:var(--dci)}
+.sname{font-weight:600}
+.cat{margin-left:8px;font-size:12.5px;color:var(--muted)}
+.note{margin:2px 0 0;color:var(--muted);font-size:13px}
+.sctl{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.mini{border:1px solid var(--line);background:transparent;color:var(--muted);border-radius:6px;padding:3px 8px;font-weight:500;font-size:12.5px}
+.mini[aria-pressed="true"]{background:var(--ink);color:var(--card);border-color:var(--ink)}
+li.leg{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 0 13px;padding:4px 0 4px 22px;border-left:2px dashed var(--dc);color:var(--muted);font-size:13px;list-style:none}
+.modesel,.movesel,.timein,.linein{width:auto;margin:0;padding:3px 7px;font-size:13px;border-radius:6px}
+.timein{width:104px}.linein{width:74px}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.card{background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:14px 16px}
+.card h3{font:700 18px var(--head);margin:8px 0 6px;letter-spacing:-.01em}
+.card p{margin:0 0 8px}
+.muted{color:var(--muted)}.small{font-size:13px}
+.bkhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tag{font-size:12.5px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:2px 8px}
+.area{font-size:13px;color:var(--muted)}
+label{display:block;font-size:13px;color:var(--muted);margin:8px 0 0}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--paper);border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;margin-top:3px}
+textarea{resize:vertical}
+.addrow{display:flex;gap:8px;align-items:center;margin-top:10px}
+.addrow select{margin:0;flex:1}
+.addbk{margin-top:16px;max-width:760px}
+.addbk .row{display:grid;grid-template-columns:150px 1fr 1fr auto;gap:10px;align-items:end;margin-top:6px}
+@media (max-width:700px){.addbk .row{grid-template-columns:1fr}}
+.lede{max-width:64ch;margin:0 0 14px;color:var(--muted)}
+.foot{margin-top:30px;padding-top:14px;border-top:1.5px solid var(--line);color:var(--muted);font-size:13px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.foot p{margin:0;max-width:72ch}
+
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translate(-50%,16px);opacity:0;pointer-events:none;background:var(--ink);color:var(--card);padding:10px 16px;border-radius:10px;transition:opacity .2s,transform .2s;max-width:90vw;z-index:20}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------- data ---------- */
+var PLACES = {
+  bercy:      {name:'Paris Bercy Seine (coach station)', cat:'transport', lat:48.8355, lng:2.3825, note:'Arrival by overnight coach.'},
+  hotel:      {name:'Sample hotel near the Étoile', cat:'stay', lat:48.8745, lng:2.2930, approx:true, note:'Location is approximate. Add the exact address.'},
+  grolet:     {name:'Cédric Grolet at Le Meurice', cat:'food', lat:48.8654, lng:2.3281},
+  tuileries:  {name:'Jardin des Tuileries', cat:'nature', lat:48.8635, lng:2.3275},
+  montmartre: {name:'Montmartre and Sacré-Cœur', cat:'sight', lat:48.8867, lng:2.3431},
+  galeries:   {name:'Galeries Lafayette Haussmann', cat:'shop', lat:48.8738, lng:2.3320},
+  cruise:     {name:'Seine cruise, Vedettes du Pont Neuf', cat:'sight', lat:48.8572, lng:2.3411},
+  trocadero:  {name:'Place du Trocadéro', cat:'sight', lat:48.8616, lng:2.2893},
+  champ:      {name:'Champ de Mars', cat:'nature', lat:48.8556, lng:2.2986},
+  latin:      {name:'Quartier Latin', cat:'sight', lat:48.8503, lng:2.3470},
+  eiffel:     {name:'Eiffel Tower ascent', cat:'sight', lat:48.8584, lng:2.2945, note:'A timed ticket: a fixed slot on Monday.'},
+  arc:        {name:'Arc de Triomphe', cat:'sight', lat:48.8738, lng:2.2950, note:'Visited at night.'},
+  marais:     {name:'Le Marais', cat:'sight', lat:48.8575, lng:2.3620, note:'Left out of the first plan. Old streets, Place des Vosges and the Enfants Rouges market are all close.'},
+  monceau:    {name:'Parc Monceau', cat:'nature', lat:48.8796, lng:2.3089}
+};
+var IDEAS = [
+  {id:'enfants', name:'Marché des Enfants Rouges', area:'Marais', cat:'food', lat:48.8630, lng:2.3622,
+   why:'Covered market with food stalls from many cuisines. A good lunch stop in the middle of a sightseeing day.'},
+  {id:'aligre', name:'Marché d’Aligre', area:'Faubourg Saint-Antoine', cat:'food', lat:48.8494, lng:2.3780,
+   why:'Open-air market with a covered hall beside it, known for produce and cheese.'},
+  {id:'cler', name:'Rue Cler', area:'Near the Eiffel Tower', cat:'food', lat:48.8564, lng:2.3064,
+   why:'Pedestrian market street with food shops, a short walk from the Champ de Mars. Easy to fold into an Eiffel day.'},
+  {id:'mouffetard', name:'Rue Mouffetard', area:'Quartier Latin', cat:'food', lat:48.8430, lng:2.3500,
+   why:'Market street through the Latin Quarter, lined with food shops and small restaurants.'},
+  {id:'buttes', name:'Parc des Buttes-Chaumont', area:'19th arrondissement', cat:'nature', lat:48.8809, lng:2.3828,
+   why:'Hilly park with a lake, cliffs and a viewpoint. The nearest thing Paris has to a short hike.'},
+  {id:'canal', name:'Canal Saint-Martin', area:'Quai de Valmy', cat:'nature', lat:48.8715, lng:2.3650,
+   why:'Waterside walk with iron footbridges and cafés. Pairs well with the Marais markets.'},
+  {id:'luxembourg', name:'Jardin du Luxembourg', area:'Next to the Latin Quarter', cat:'nature', lat:48.8462, lng:2.3371,
+   why:'Formal gardens beside the Latin Quarter. A slow morning walk before a busy afternoon.'}
+];
+IDEAS.forEach(function(i){PLACES[i.id]={name:i.name,cat:i.cat,lat:i.lat,lng:i.lng};});
+
+var CAT = {stay:'Stay',food:'Food',nature:'Nature',sight:'Sight',shop:'Shopping',transport:'Transport'};
+var BKTYPE = {bus:'Bus',flight:'Flight',stay:'Stay',ticket:'Ticket',table:'Reservation',other:'Other'};
+var MODES = {walk:'Walk',metro:'Metro',bus:'Bus',bike:'Rental bike'};
+var MSTYLE = {walk:{dash:[0.1,8],w:4.5},bike:{dash:[10,6],w:3.5},metro:{dash:null,w:4},bus:{dash:[18,6,3,6],w:3.5}};
+var DAYS = [
+  {date:'Fri 30 Oct', long:'Friday 30 October'},
+  {date:'Sat 31 Oct', long:'Saturday 31 October'},
+  {date:'Sun 1 Nov',  long:'Sunday 1 November'},
+  {date:'Mon 2 Nov',  long:'Monday 2 November', end:'Evening: flight home from Orly.'}
+];
+var INSIGHTS = {
+  done:[
+    'The longest leg is the first one, from Bercy to Le Meurice. After that it is a compact stretch along the Tuileries.',
+    'A clean north-to-south line, ending with the cruise at Pont Neuf. The one issue is that Galeries Lafayette comes back on Day 3.',
+    'The longest day for distance. It zig-zags from the Eiffel area in the west to Galeries Lafayette in the north, the Latin Quarter in the south-east, then back west to the Arc de Triomphe.',
+    'A single stop. The ticket is for Monday, so the rest of the Eiffel area could have joined it on this day.'
+  ],
+  sug:[
+    'Unchanged. Bercy is on the south-east edge, so the first leg is always the longest.',
+    'Unchanged. Galeries Lafayette once, then the cruise from Pont Neuf.',
+    'Works west across the old city: Le Marais, left out of the first plan, then the Latin Quarter, then the Arc de Triomphe at night, close to the hotel. Galeries Lafayette is dropped because Day 2 already covers it.',
+    'The Eiffel ticket stays on Monday, so the whole Eiffel area becomes one block: Champ de Mars, the ascent, then the Trocadéro. Leave a long buffer for Orly.'
+  ]
+};
+var SEINE = [[2.2560,48.8350],[2.2650,48.8385],[2.2735,48.8465],[2.2822,48.8512],[2.2877,48.8556],[2.2927,48.8607],[2.3010,48.8640],[2.3102,48.8639],[2.3180,48.8639],[2.3283,48.8625],[2.3375,48.8583],[2.3413,48.8570],[2.3499,48.8545],[2.3594,48.8508],[2.3668,48.8444],[2.3790,48.8370],[2.3960,48.8330]];
+var PARKS = [
+  [[2.2550,48.8490],[2.2650,48.8530],[2.2700,48.8650],[2.2740,48.8710],[2.2690,48.8780],[2.2550,48.8780]],
+  [[2.3225,48.8660],[2.3335,48.8645],[2.3335,48.8630],[2.3225,48.8643]],
+  [[2.2930,48.8570],[2.2955,48.8590],[2.3050,48.8560],[2.3030,48.8535]],
+  [[2.3295,48.8482],[2.3405,48.8482],[2.3405,48.8442],[2.3295,48.8442]],
+  [[2.3050,48.8815],[2.3115,48.8815],[2.3115,48.8785],[2.3050,48.8785]],
+  [[2.3780,48.8845],[2.3880,48.8845],[2.3880,48.8780],[2.3780,48.8780]]
+];
+var STREETS = [
+  [[2.2950,48.8738],[2.3070,48.8700],[2.3180,48.8665],[2.3210,48.8656]],
+  [[2.3210,48.8662],[2.3280,48.8652],[2.3376,48.8628],[2.3522,48.8570],[2.3691,48.8534]],
+  [[2.3140,48.8605],[2.3330,48.8548],[2.3470,48.8517],[2.3600,48.8492]],
+  [[2.3250,48.8700],[2.3299,48.8714],[2.3485,48.8707],[2.3636,48.8674]],
+  [[2.3440,48.8535],[2.3405,48.8470],[2.3385,48.8410]]
+];
+var CANAL = [[2.3691,48.8532],[2.3660,48.8620],[2.3652,48.8700],[2.3675,48.8790]];
+var LANDMARKS = [['Louvre',2.3376,48.8606],['Notre-Dame',2.3499,48.8530],['Opéra Garnier',2.3316,48.8719],['Panthéon',2.3461,48.8462],['Musée d’Orsay',2.3266,48.8600],['Invalides',2.3125,48.8566]];
+var AREAS = [['Le Marais',2.3620,48.8578],['Saint-Germain',2.3330,48.8535],['Champs-Élysées',2.3080,48.8693],['Canal Saint-Martin',2.3705,48.8700]];
+
+function S(pid,o){ o=o||{}; return {pid:pid,pin:!!o.pin,time:o.time||'',mode:'auto',line:''}; }
+function defaultPlans(){
+  return {
+    done:[[S('bercy',{pin:true,time:'Morning'}),S('grolet'),S('tuileries'),S('hotel')],
+          [S('montmartre'),S('galeries'),S('cruise')],
+          [S('trocadero'),S('champ'),S('galeries'),S('latin'),S('arc',{pin:true,time:'Night'})],
+          [S('eiffel',{pin:true})]],
+    sug: [[S('bercy',{pin:true,time:'Morning'}),S('grolet'),S('tuileries'),S('hotel')],
+          [S('montmartre'),S('galeries'),S('cruise')],
+          [S('marais'),S('latin'),S('arc',{pin:true,time:'Night'})],
+          [S('champ'),S('eiffel',{pin:true}),S('trocadero')]]
+  };
+}
+function defaultBookings(){
+  return [
+    {id:'b1', type:'bus', title:'Overnight coach to Paris Bercy Seine', when:'Thu 29 Oct night, arriving Fri 30 Oct morning', details:'Confirmation code: add here.'},
+    {id:'b2', type:'stay', title:'Sample hotel near the Étoile', when:'Fri 30 Oct to Mon 2 Nov, 3 nights', details:'Address and confirmation: add here.'},
+    {id:'b3', type:'ticket', title:'Eiffel Tower ascent', when:'Mon 2 Nov, time slot to add', details:'Time slot: add here.'},
+    {id:'b4', type:'ticket', title:'Seine cruise, Vedettes du Pont Neuf', when:'Sat 31 Oct, time to add', details:''},
+    {id:'b5', type:'flight', title:'Flight home from Paris Orly', when:'Mon 2 Nov, evening', details:'Airline, flight number and departure time: add here.'}
+  ];
+}
+
+/* ---------- state ---------- */
+var KEY = 'paris-trip-planner-v2';
+var state = {tab:'itin', plan:'done', day:'all', idea:'all', plans:defaultPlans(), bookings:defaultBookings()};
+var resetArmed = false;
+
+function load(){
+  try{
+    var raw = localStorage.getItem(KEY); if(!raw) return;
+    var s = JSON.parse(raw);
+    if(!s || !s.plans || !Array.isArray(s.bookings)) return;
+    var ok = ['done','sug'].every(function(k){
+      return Array.isArray(s.plans[k]) && s.plans[k].length===4 && s.plans[k].every(function(day){
+        return Array.isArray(day) && day.every(function(x){return x && PLACES[x.pid];});
+      });
+    });
+    if(ok){ state.plans = s.plans; state.bookings = s.bookings; }
+  }catch(e){}
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify({plans:state.plans,bookings:state.bookings})); }catch(e){}
+}
+
+/* ---------- geometry and travel time ---------- */
+function km(a,b){
+  var R=6371, r=Math.PI/180, dLat=(b.lat-a.lat)*r, dLng=(b.lng-a.lng)*r;
+  var x=Math.pow(Math.sin(dLat/2),2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.pow(Math.sin(dLng/2),2);
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+var SPEED = {
+  walk:function(d){return d*16.25;},
+  bike:function(d){return 4+d*5.57;},
+  metro:function(d){return 10+d*3.9;},
+  bus:function(d){return 8+d*6.5;}
+};
+function effMode(d,m){ if(SPEED[m]) return m; return SPEED.walk(d)<=SPEED.metro(d)?'walk':'metro'; }
+function legMin(d,m){ return SPEED[effMode(d,m)](d); }
+function fmtMin(n){
+  n=Math.round(n); if(n<60) return n+' min';
+  var h=Math.floor(n/60), m=n%60; return h+' h'+(m?' '+(m<10?'0':'')+m+' min':'');
+}
+function dayKm(stops){
+  var t=0; for(var i=1;i<stops.length;i++){ t+=km(PLACES[stops[i-1].pid],PLACES[stops[i].pid]); } return t;
+}
+function dayMin(stops,forceAuto){
+  var t=0; for(var i=1;i<stops.length;i++){
+    t+=legMin(km(PLACES[stops[i-1].pid],PLACES[stops[i].pid]), forceAuto?'auto':stops[i-1].mode);
+  } return t;
+}
+function planKm(k){ return state.plans[k].reduce(function(a,d){return a+dayKm(d);},0); }
+function planMin(k){ return state.plans[k].reduce(function(a,d){return a+dayMin(d,false);},0); }
+function planStops(k){ return state.plans[k].reduce(function(a,d){return a+d.length;},0); }
+function nearest(pid){
+  var best={d:0,pid:'',km:Infinity};
+  state.plans.sug.forEach(function(day,di){
+    day.forEach(function(s){
+      if(s.pid===pid) return;
+      var k=km(PLACES[pid],PLACES[s.pid]);
+      if(k<best.km) best={d:di,pid:s.pid,km:k};
+    });
+  });
+  return best;
+}
+function permutations(arr){
+  if(arr.length<=1) return [arr];
+  var out=[];
+  arr.forEach(function(x,i){
+    permutations(arr.slice(0,i).concat(arr.slice(i+1))).forEach(function(p){ out.push([x].concat(p)); });
+  });
+  return out;
+}
+
+/* ---------- map ---------- */
+var B={lonMin:2.255,lonMax:2.395,latMin:48.832,latMax:48.892}, W=900;
+var COS=Math.cos(48.86*Math.PI/180);
+var SC=W/((B.lonMax-B.lonMin)*COS), H=Math.round((B.latMax-B.latMin)*SC);
+function px(lng){return (lng-B.lonMin)*COS*SC;}
+function py(lat){return (B.latMax-lat)*SC;}
+function pt(p){return px(p[0]).toFixed(1)+','+py(p[1]).toFixed(1);}
+function smooth(p){
+  var d='M'+p[0][0].toFixed(1)+','+p[0][1].toFixed(1);
+  for(var i=1;i<p.length-1;i++){
+    var mx=(p[i][0]+p[i+1][0])/2, my=(p[i][1]+p[i+1][1])/2;
+    d+=' Q'+p[i][0].toFixed(1)+','+p[i][1].toFixed(1)+' '+mx.toFixed(1)+','+my.toFixed(1);
+  }
+  var l=p[p.length-1]; return d+' L'+l[0].toFixed(1)+','+l[1].toFixed(1);
+}
+function viewFor(ids){
+  var xs=ids.map(function(p){return px(PLACES[p].lng);}), ys=ids.map(function(p){return py(PLACES[p].lat);});
+  var x0=Math.min.apply(null,xs), x1=Math.max.apply(null,xs), y0=Math.min.apply(null,ys), y1=Math.max.apply(null,ys);
+  var pad=90; x0-=pad; x1+=pad; y0-=pad; y1+=pad;
+  var w=x1-x0, h=y1-y0, ar=W/H;
+  if(w/h<ar){ var nw=h*ar; x0-=(nw-w)/2; w=nw; } else { var nh=w/ar; y0-=(nh-h)/2; h=nh; }
+  if(w<320){ var k=320/w, cx=x0+w/2, cy=y0+h/2; w*=k; h*=k; x0=cx-w/2; y0=cy-h/2; }
+  return [x0,y0,w,h].map(function(n){return +n.toFixed(1);});
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function dashAttr(m,u){
+  var s=MSTYLE[m]; if(!s.dash) return '';
+  return ' stroke-dasharray="'+s.dash.map(function(n){return +(n*u).toFixed(2);}).join(' ')+'"';
+}
+
+function drawMap(){
+  var host=document.getElementById('map'); if(!host) return;
+  var plan=state.plans[state.plan];
+  var days=state.day==='all'?[0,1,2,3]:[state.day];
+  var ids=['hotel']; days.forEach(function(d){ plan[d].forEach(function(s){ ids.push(s.pid); }); });
+  var v=viewFor(ids), vx=v[0], vy=v[1], vw=v[2], vh=v[3];
+  var cw=host.clientWidth||600, u=vw/cw;
+  var boxes=[], markers=[];
+
+  var hp=PLACES.hotel, hx=px(hp.lng), hy=py(hp.lat);
+  boxes.push({x0:hx-14*u,x1:hx+14*u,y0:hy-14*u,y1:hy+14*u});
+  days.forEach(function(d){
+    plan[d].forEach(function(s,i){
+      var p=PLACES[s.pid], x=px(p.lng), y=py(p.lat);
+      var flip=x>vx+vw*0.62, w=p.name.length*6.8*u, lx=flip?x-18*u:x+18*u;
+      markers.push({d:d,i:i,p:p,pid:s.pid,x:x,y:y,flip:flip,lx:lx});
+      boxes.push({x0:x-18*u,x1:x+18*u,y0:y-18*u,y1:y+18*u});
+      if(state.day!=='all') boxes.push({x0:flip?lx-w:lx,x1:flip?lx:lx+w,y0:y-10*u,y1:y+10*u});
+    });
+  });
+  function free(b){
+    if(b.x0<vx+4*u||b.x1>vx+vw-4*u||b.y0<vy+4*u||b.y1>vy+vh-4*u) return false;
+    return !boxes.some(function(o){return b.x0<o.x1&&b.x1>o.x0&&b.y0<o.y1&&b.y1>o.y0;});
+  }
+
+  var g='<rect class="land" x="'+vx+'" y="'+vy+'" width="'+vw+'" height="'+vh+'"/>';
+  PARKS.forEach(function(poly){ g+='<polygon points="'+poly.map(pt).join(' ')+'" fill="var(--park)"/>'; });
+  STREETS.forEach(function(line){ g+='<polyline points="'+line.map(pt).join(' ')+'" fill="none" stroke="var(--street)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'; });
+  g+='<polyline points="'+CANAL.map(pt).join(' ')+'" fill="none" stroke="var(--water)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>';
+  var seinePath=smooth(SEINE.map(function(p){return [px(p[0]),py(p[1])];}));
+  g+='<path id="seine" d="'+seinePath+'" fill="none" stroke="var(--water)" stroke-width="13" stroke-linecap="round"/>';
+  g+='<text font-size="'+(11*u)+'" font-style="italic" style="fill:var(--muted)" dy="'+(3.5*u)+'"><textPath href="#seine" startOffset="44%">Seine</textPath></text>';
+
+  AREAS.forEach(function(a){
+    var x=px(a[1]), y=py(a[2]), w=a[0].length*6*u, b={x0:x-w/2,x1:x+w/2,y0:y-8*u,y1:y+8*u};
+    if(free(b)){ boxes.push(b); g+='<text class="ctx" x="'+x+'" y="'+(y+3.5*u)+'" text-anchor="middle" font-size="'+(11.5*u)+'" font-style="italic" stroke-width="'+(3.5*u)+'">'+esc(a[0])+'</text>'; }
+  });
+  LANDMARKS.forEach(function(a){
+    var x=px(a[1]), y=py(a[2]), w=a[0].length*6*u, b={x0:x-5*u,x1:x+9*u+w,y0:y-8*u,y1:y+8*u};
+    if(free(b)){
+      boxes.push(b);
+      g+='<rect x="'+(x-3.5*u)+'" y="'+(y-3.5*u)+'" width="'+(7*u)+'" height="'+(7*u)+'" transform="rotate(45 '+x+' '+y+')" style="fill:var(--muted)"/>';
+      g+='<text class="ctx" x="'+(x+8*u)+'" y="'+(y+3.5*u)+'" font-size="'+(11*u)+'" stroke-width="'+(3.5*u)+'">'+esc(a[0])+'</text>';
+    }
+  });
+
+  var kmBar=SC/111.2, bx=vx+14*u, by=vy+vh-14*u;
+  g+='<line x1="'+bx+'" y1="'+by+'" x2="'+(bx+kmBar)+'" y2="'+by+'" stroke="var(--ink)" stroke-width="'+(2.5*u)+'" stroke-linecap="round"/>';
+  g+='<text class="ctx" x="'+bx+'" y="'+(by-7*u)+'" font-size="'+(11*u)+'" stroke-width="'+(3.5*u)+'">1 km</text>';
+
+  var hs=9*u;
+  g+='<g><title>'+esc(hp.name)+'</title><rect x="'+(hx-hs)+'" y="'+(hy-hs)+'" width="'+(2*hs)+'" height="'+(2*hs)+'" rx="'+(3*u)+'" fill="var(--ink)"/><text x="'+hx+'" y="'+(hy+4*u)+'" text-anchor="middle" font-size="'+(11*u)+'" font-weight="700" fill="var(--card)">H</text></g>';
+
+  days.forEach(function(d){
+    var stops=plan[d];
+    for(var i=0;i<stops.length-1;i++){
+      var a=PLACES[stops[i].pid], b2=PLACES[stops[i+1].pid];
+      var m=effMode(km(a,b2),stops[i].mode), st=MSTYLE[m];
+      g+='<line x1="'+px(a.lng).toFixed(1)+'" y1="'+py(a.lat).toFixed(1)+'" x2="'+px(b2.lng).toFixed(1)+'" y2="'+py(b2.lat).toFixed(1)+'" style="stroke:var(--d'+(d+1)+')" stroke-width="'+(st.w*u)+'" stroke-linecap="round"'+dashAttr(m,u)+'/>';
+    }
+  });
+
+  markers.forEach(function(m){
+    var r=12*u;
+    g+='<g class="mk" data-pid="'+m.pid+'"><title>'+esc(m.p.name)+'</title>';
+    if(m.p.approx) g+='<circle cx="'+m.x+'" cy="'+m.y+'" r="'+(17*u)+'" fill="none" stroke="var(--muted)" stroke-width="'+(1.5*u)+'" stroke-dasharray="'+(3*u)+' '+(3*u)+'"/>';
+    g+='<circle cx="'+m.x+'" cy="'+m.y+'" r="'+r+'" style="fill:var(--d'+(m.d+1)+');stroke:var(--card)" stroke-width="'+(2*u)+'"/>';
+    g+='<text x="'+m.x+'" y="'+(m.y+4.5*u)+'" text-anchor="middle" font-size="'+(13*u)+'" font-weight="700" style="font-family:var(--head);fill:var(--d'+(m.d+1)+'i)">'+(m.i+1)+'</text>';
+    if(state.day!=='all'){
+      g+='<text class="lbl" x="'+m.lx+'" y="'+(m.y+4.5*u)+'" text-anchor="'+(m.flip?'end':'start')+'" font-size="'+(12.5*u)+'" stroke-width="'+(4*u)+'">'+esc(m.p.name)+'</text>';
+    }
+    g+='</g>';
+  });
+  host.innerHTML='<svg viewBox="'+vx+' '+vy+' '+vw+' '+vh+'" role="img" aria-label="Schematic map of the stops in the selected plan">'+g+'</svg>';
+}
+
+/* ---------- views ---------- */
+function viewHeader(){
+  var dk=planKm('done'), sk=planKm('sug'), dm=planMin('done'), sm=planMin('sug');
+  function planBtn(k,label,total,stops,mins,extra){
+    return '<button class="plan" data-act="plan" data-v="'+k+'" aria-pressed="'+(state.plan===k)+'"><b>'+label+'</b><span class="big">'+total.toFixed(1)+' km</span><span class="sub">'+stops+' stops, about '+fmtMin(mins)+' travelling</span>'+(extra||'')+'</button>';
+  }
+  var gain='';
+  if(dk-sk>0.05 && dm-sm>1) gain='<span class="sub gain">'+(dk-sk).toFixed(1)+' km and '+fmtMin(dm-sm)+' less</span>';
+  return '<div class="masthead"><div><h1>Paris</h1><p class="trip">Friday 30 October to Monday 2 November 2026. Two travellers, three nights at a sample hotel near the Étoile.</p></div>'+
+    '<div class="plans" role="group" aria-label="Choose a plan">'+
+    planBtn('done','What we did',dk,planStops('done'),dm)+
+    planBtn('sug','Suggested',sk,planStops('sug'),sm,gain)+
+    '</div></div>';
+}
+function viewTabs(){
+  var t=[['itin','Itinerary'],['book','Bookings'],['ideas','Ideas']];
+  return '<div class="tabs" role="tablist">'+t.map(function(x){
+    return '<button class="tab" role="tab" data-act="tab" data-v="'+x[0]+'" aria-selected="'+(state.tab===x[0])+'">'+x[1]+'</button>';
+  }).join('')+'</div>';
+}
+function legendHtml(){
+  return '<div class="legend" aria-label="Transport legend">'+Object.keys(MODES).map(function(m){
+    var s=MSTYLE[m];
+    return '<span><svg width="38" height="10" viewBox="0 0 38 10" aria-hidden="true"><line x1="4" y1="5" x2="34" y2="5" stroke="currentColor" stroke-width="'+s.w+'" stroke-linecap="round"'+dashAttr(m,1)+'/></svg>'+MODES[m]+'</span>';
+  }).join('')+'</div>';
+}
+function viewItin(){
+  var chips='<div class="chips" role="group" aria-label="Filter by day"><button class="chip all" data-act="day" data-v="all" aria-pressed="'+(state.day==='all')+'">All days</button>';
+  for(var d=0;d<4;d++){
+    chips+='<button class="chip" data-act="day" data-v="'+d+'" aria-pressed="'+(state.day===d)+'"><span class="roundel r'+(d+1)+'">'+(d+1)+'</span>'+DAYS[d].date+'</button>';
+  }
+  chips+='</div>';
+  var map='<div class="mappane">'+chips+'<div class="mapbox" id="map"></div>'+legendHtml()+'<p class="mapnote">Schematic map, not to scale. Dashed rings mark approximate locations. The square marked H is the hotel.</p></div>';
+  var plan=state.plans[state.plan], days=state.day==='all'?[0,1,2,3]:[state.day];
+  var list=days.map(function(d){
+    var stops=plan[d], n=d+1;
+    var rows=stops.map(function(s,i){
+      var p=PLACES[s.pid], nm=esc(p.name);
+      var moveOpts='<option value="">Move to…</option>'+[0,1,2,3].filter(function(x){return x!==d;}).map(function(x){return '<option value="'+x+'">Day '+(x+1)+', '+DAYS[x].date+'</option>';}).join('');
+      var row='<li class="stop" data-pid="'+s.pid+'"><span class="num">'+(i+1)+'</span><div><div><span class="sname">'+nm+'</span><span class="cat">'+CAT[p.cat]+'</span></div>'+(p.note?'<p class="note">'+esc(p.note)+'</p>':'')+
+        '<div class="sctl"><button class="mini" data-act="pin" data-d="'+d+'" data-i="'+i+'" aria-pressed="'+s.pin+'" title="A fixed slot stays on this day and in this position when you optimise" aria-label="Fixed slot for '+nm+'">Fixed slot</button>'+
+        ((s.pin||s.time)?'<input class="timein" data-fk="t'+d+'-'+i+'" data-time data-d="'+d+'" data-i="'+i+'" value="'+esc(s.time)+'" placeholder="Time, e.g. 10:30" aria-label="Time slot for '+nm+'">':'')+
+        '<button class="mini" data-act="up" data-d="'+d+'" data-i="'+i+'" aria-label="Move '+nm+' up"'+(i===0?' disabled':'')+'>↑</button>'+
+        '<button class="mini" data-act="down" data-d="'+d+'" data-i="'+i+'" aria-label="Move '+nm+' down"'+(i===stops.length-1?' disabled':'')+'>↓</button>'+
+        '<select class="movesel" data-fk="mv'+d+'-'+i+'" data-move data-d="'+d+'" data-i="'+i+'" aria-label="Move '+nm+' to another day"'+(s.pin?' disabled title="Fixed stops stay on their day"':'')+'>'+moveOpts+'</select>'+
+        '<button class="mini" data-act="rm" data-d="'+d+'" data-i="'+i+'" aria-label="Remove '+nm+'">Remove</button></div></div></li>';
+      if(i<stops.length-1){
+        var nx=PLACES[stops[i+1].pid], dist=km(p,nx), em=effMode(dist,s.mode), mins=legMin(dist,s.mode);
+        var mopts='<option value="auto"'+(s.mode==='auto'?' selected':'')+'>Auto ('+MODES[effMode(dist,'auto')]+')</option>'+Object.keys(MODES).map(function(m){return '<option value="'+m+'"'+(s.mode===m?' selected':'')+'>'+MODES[m]+'</option>';}).join('');
+        row+='<li class="leg"><select class="modesel" data-fk="m'+d+'-'+i+'" data-mode data-d="'+d+'" data-i="'+i+'" aria-label="Transport from '+nm+' to '+esc(nx.name)+'">'+mopts+'</select><span>'+dist.toFixed(1)+' km, about '+fmtMin(mins)+'</span>'+
+          ((em==='metro'||em==='bus')?'<input class="linein" data-fk="l'+d+'-'+i+'" data-line data-d="'+d+'" data-i="'+i+'" value="'+esc(s.line||'')+'" placeholder="Line" aria-label="Line for this leg">':'')+'</li>';
+      }
+      return row;
+    }).join('');
+    return '<section class="day" style="--dc:var(--d'+n+');--dci:var(--d'+n+'i)"><header class="dayhead"><span class="roundel">'+n+'</span><h3>'+DAYS[d].long+'</h3>'+
+      '<div class="daytools"><span class="km">'+dayKm(stops).toFixed(1)+' km, '+fmtMin(dayMin(stops,false))+'</span><button class="btn" data-act="opt" data-d="'+d+'">Optimise order</button></div></header>'+
+      '<p class="insight">'+esc(INSIGHTS[state.plan][d])+'</p>'+
+      '<ol class="stops">'+(rows||'<li class="note">No stops yet. Add some from the Ideas tab.</li>')+'</ol>'+
+      (DAYS[d].end?'<p class="edge">'+DAYS[d].end+'</p>':'')+'</section>';
+  }).join('');
+  return '<div class="itin">'+map+'<div>'+list+'</div></div>';
+}
+function viewBook(){
+  var cards=state.bookings.map(function(b){
+    return '<article class="card"><div class="bkhead"><span class="tag">'+(BKTYPE[b.type]||'Other')+'</span><button class="mini" data-act="delbk" data-id="'+b.id+'" aria-label="Delete '+esc(b.title)+'">Delete</button></div>'+
+      '<h3>'+esc(b.title)+'</h3>'+
+      '<label>When<input data-bid="'+b.id+'" data-f="when" value="'+esc(b.when)+'"></label>'+
+      '<label>Details<textarea rows="3" data-bid="'+b.id+'" data-f="details">'+esc(b.details)+'</textarea></label></article>';
+  }).join('');
+  var opts=Object.keys(BKTYPE).map(function(k){return '<option value="'+k+'">'+BKTYPE[k]+'</option>';}).join('');
+  return '<p class="lede">Everything you need on the road in one place: transport, stays, tickets and reservations. Edit any field and it saves on this device.</p>'+
+    '<div class="grid">'+cards+'</div>'+
+    '<section class="card addbk"><h3>Add a booking</h3><div class="row">'+
+    '<label>Type<select id="nbType">'+opts+'</select></label>'+
+    '<label>Title<input id="nbTitle" placeholder="Louvre timed entry"></label>'+
+    '<label>When<input id="nbWhen" placeholder="Sat 31 Oct, 10:00"></label>'+
+    '<button class="btn solid" data-act="addbk">Add booking</button></div></section>';
+}
+function viewIdeas(){
+  var f=[['all','All'],['nature','Nature'],['food','Food']];
+  var chips='<div class="chips" role="group" aria-label="Filter ideas">'+f.map(function(x){
+    return '<button class="chip all" data-act="idea" data-v="'+x[0]+'" aria-pressed="'+(state.idea===x[0])+'">'+x[1]+'</button>';
+  }).join('')+'</div>';
+  var cards=IDEAS.filter(function(i){return state.idea==='all'||i.cat===state.idea;}).map(function(i){
+    var n=nearest(i.id);
+    var opts=[0,1,2,3].map(function(d){return '<option value="'+d+'"'+(d===n.d?' selected':'')+'>Day '+(d+1)+', '+DAYS[d].date+'</option>';}).join('');
+    return '<article class="card"><div class="bkhead"><span class="tag">'+CAT[i.cat]+'</span><span class="area">'+esc(i.area)+'</span></div>'+
+      '<h3>'+esc(i.name)+'</h3><p>'+esc(i.why)+'</p>'+
+      '<p class="muted small">Closest stop in the suggested plan: '+esc(PLACES[n.pid].name)+', Day '+(n.d+1)+', '+n.km.toFixed(1)+' km away.</p>'+
+      '<p class="muted small">Opening days, hours and traveller reviews: not checked yet.</p>'+
+      '<div class="addrow"><select data-sel="'+i.id+'" aria-label="Day for '+esc(i.name)+'">'+opts+'</select><button class="btn" data-act="addidea" data-id="'+i.id+'">Add to suggested</button></div></article>';
+  }).join('');
+  return '<p class="lede">Ideas chosen for nature, hiking and food. Each one shows the nearest stop in the suggested plan, so you can see where it would fit.</p>'+chips+'<div class="grid">'+cards+'</div>';
+}
+function viewFoot(){
+  return '<div class="foot"><p>Distances are straight-line estimates between stops. Travel times assume typical walking, rental bike, metro and bus speeds and include waiting time. Locations marked approximate need the exact address. Opening hours and reviews are not connected yet.</p>'+
+    '<button class="mini" data-act="reset">'+(resetArmed?'Click again to reset everything':'Reset trip data')+'</button></div>';
+}
+
+function render(){
+  var a=document.activeElement, sel=null;
+  if(a && a.dataset){
+    if(a.dataset.act){
+      sel='[data-act="'+a.dataset.act+'"]';
+      ['d','i','v','id'].forEach(function(k){ if(a.dataset[k]!==undefined) sel+='[data-'+k+'="'+a.dataset[k]+'"]'; });
+    } else if(a.dataset.fk){ sel='[data-fk="'+a.dataset.fk+'"]'; }
+  }
+  var body = state.tab==='itin' ? viewItin() : state.tab==='book' ? viewBook() : viewIdeas();
+  document.getElementById('app').innerHTML = viewHeader()+viewTabs()+body+viewFoot();
+  if(state.tab==='itin') drawMap();
+  if(sel){ var n=document.querySelector(sel); if(n && !n.disabled) n.focus({preventScroll:true}); }
+}
+
+/* ---------- actions ---------- */
+var toastT;
+function toast(msg){
+  var el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(function(){el.classList.remove('show');},3000);
+}
+function optimise(d){
+  var stops=state.plans[state.plan][d];
+  var freeIdx=[]; stops.forEach(function(s,i){ if(!s.pin) freeIdx.push(i); });
+  if(freeIdx.length<2){ toast('Day '+(d+1)+' has too few unfixed stops to reorder.'); return; }
+  if(freeIdx.length>7){ toast('Too many stops to optimise at once. Fix some first.'); return; }
+  var free=freeIdx.map(function(i){return stops[i];}), best=null, bestMin=Infinity;
+  var beforeMin=dayMin(stops,true), beforeKm=dayKm(stops);
+  permutations(free).forEach(function(p){
+    var t=stops.slice(); freeIdx.forEach(function(idx,j){t[idx]=p[j];});
+    var m=dayMin(t,true); if(m<bestMin-1e-9){bestMin=m;best=t;}
+  });
+  if(bestMin>=beforeMin-1){ toast('Day '+(d+1)+' is already in the quickest order.'); return; }
+  best.forEach(function(s){s.mode='auto';s.line='';});
+  state.plans[state.plan][d]=best; save(); render();
+  toast('Day '+(d+1)+': '+beforeKm.toFixed(1)+' km down to '+dayKm(best).toFixed(1)+' km, about '+fmtMin(beforeMin-bestMin)+' saved. Fixed slots stayed put.');
+}
+document.addEventListener('click',function(e){
+  var t=e.target.closest('[data-act]'); if(!t) return;
+  var act=t.dataset.act, d=+t.dataset.d, i=+t.dataset.i, v=t.dataset.v, id=t.dataset.id;
+  var plan=state.plans[state.plan];
+  if(act!=='reset') resetArmed=false;
+  if(act==='tab'){ state.tab=v; render(); }
+  else if(act==='plan'){ state.plan=v; render(); }
+  else if(act==='day'){ state.day = v==='all' ? 'all' : +v; render(); }
+  else if(act==='idea'){ state.idea=v; render(); }
+  else if(act==='opt'){ optimise(d); }
+  else if(act==='pin'){ plan[d][i].pin=!plan[d][i].pin; save(); render(); }
+  else if(act==='up' && i>0){ var s=plan[d]; var x=s[i]; s[i]=s[i-1]; s[i-1]=x; s[i].mode='auto'; s[i-1].mode='auto'; save(); render(); }
+  else if(act==='down' && i<plan[d].length-1){ var s2=plan[d]; var y=s2[i]; s2[i]=s2[i+1]; s2[i+1]=y; s2[i].mode='auto'; s2[i+1].mode='auto'; save(); render(); }
+  else if(act==='rm'){ var nm=PLACES[plan[d][i].pid].name; plan[d].splice(i,1); save(); render(); toast('Removed '+nm+' from Day '+(d+1)+'.'); }
+  else if(act==='addidea'){
+    var dd=+document.querySelector('[data-sel="'+id+'"]').value;
+    if(state.plans.sug[dd].some(function(s){return s.pid===id;})){ toast(PLACES[id].name+' is already in Day '+(dd+1)+'.'); return; }
+    state.plans.sug[dd].push(S(id)); save(); render();
+    toast('Added '+PLACES[id].name+' to Day '+(dd+1)+' of the suggested plan.');
+  }
+  else if(act==='addbk'){
+    var title=document.getElementById('nbTitle').value.trim();
+    if(!title){ toast('Add a title first.'); return; }
+    state.bookings.push({id:'b'+Date.now(), type:document.getElementById('nbType').value, title:title, when:document.getElementById('nbWhen').value.trim(), details:''});
+    save(); render(); toast('Booking added.');
+  }
+  else if(act==='delbk'){ state.bookings=state.bookings.filter(function(b){return b.id!==id;}); save(); render(); toast('Booking deleted.'); }
+  else if(act==='reset'){
+    if(!resetArmed){ resetArmed=true; render(); setTimeout(function(){ if(resetArmed){resetArmed=false; render();} },3500); }
+    else { resetArmed=false; state.plans=defaultPlans(); state.bookings=defaultBookings(); save(); render(); toast('Trip data reset.'); }
+  }
+});
+document.addEventListener('change',function(e){
+  var t=e.target; if(!t.dataset) return;
+  var plan=state.plans[state.plan], d=+t.dataset.d, i=+t.dataset.i;
+  if(t.dataset.bid){
+    var b=state.bookings.filter(function(x){return x.id===t.dataset.bid;})[0];
+    if(b){ b[t.dataset.f]=t.value; save(); }
+  } else if('mode' in t.dataset){ plan[d][i].mode=t.value; save(); render(); }
+  else if('line' in t.dataset){ plan[d][i].line=t.value; save(); }
+  else if('time' in t.dataset){ plan[d][i].time=t.value; save(); }
+  else if('move' in t.dataset){
+    if(t.value==='') return;
+    var to=+t.value, st=plan[d].splice(i,1)[0];
+    st.mode='auto'; st.line='';
+    if(i>0) plan[d][i-1].mode='auto';
+    plan[to].push(st); save(); render();
+    toast('Moved '+PLACES[st.pid].name+' to Day '+(to+1)+'.');
+  }
+});
+function hot(e,on){
+  var li=e.target.closest ? e.target.closest('.stop') : null; if(!li) return;
+  document.querySelectorAll('.mk[data-pid="'+li.dataset.pid+'"]').forEach(function(m){ m.classList.toggle('hot',on); });
+}
+document.addEventListener('mouseover',function(e){hot(e,true);});
+document.addEventListener('mouseout',function(e){hot(e,false);});
+document.addEventListener('focusin',function(e){hot(e,true);});
+document.addEventListener('focusout',function(e){hot(e,false);});
+var rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){ if(state.tab==='itin') drawMap(); },150); });
+
+load(); render();
+</script>
+</body>
+</html>
